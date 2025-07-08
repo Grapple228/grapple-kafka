@@ -10,16 +10,14 @@ use crate::{config::kafka_config, decode, Error, Result};
 
 #[async_trait]
 pub trait Receiver: Sized + Send + Sync {
-    fn from(key: &str, payload: Option<&[u8]>) -> Result<Self>;
-    async fn process(&self) -> Result<()>;
+    async fn process(key: &str, payload: Option<&[u8]>) -> Result<()>;
 }
 
 #[async_trait]
 pub trait StateReceiver: Sized + Send + Sync {
     type State;
 
-    fn from(key: &str, payload: Option<&[u8]>) -> Result<Self>;
-    async fn process(&self, state: &Self::State) -> Result<()>;
+    async fn process(key: &str, payload: Option<&[u8]>, state: &Self::State) -> Result<()>;
 }
 
 pub struct ConsumerConfig {
@@ -81,8 +79,7 @@ impl Consumer {
                     let key = message.key().ok_or(Error::KeyMissing)?;
                     let key = decode::<String>(key)?;
 
-                    let model = T::from(&key, message.payload())?;
-                    model.process().await?;
+                    T::process(&key, message.payload()).await?;
 
                     self.consumer.commit_message(&message, self.commit_mode)?;
                 }
@@ -100,8 +97,7 @@ impl Consumer {
                     let key = message.key().ok_or(Error::KeyMissing)?;
                     let key = decode::<String>(key)?;
 
-                    let model = T::from(&key, message.payload())?;
-                    model.process(&state).await?;
+                    T::process(&key, message.payload(), &state).await?;
 
                     self.consumer.commit_message(&message, self.commit_mode)?;
                 }
