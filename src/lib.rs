@@ -1,7 +1,5 @@
 // region:    --- Modules
 
-use rdkafka::message::ToBytes;
-
 // -- Modules
 pub mod consumer;
 pub mod producer;
@@ -13,6 +11,8 @@ mod error;
 #[doc(hidden)]
 pub use async_trait;
 pub use error::{Error, Result};
+#[doc(hidden)]
+pub use rdkafka::message::{FromBytes, ToBytes};
 
 // endregion: --- Modules
 
