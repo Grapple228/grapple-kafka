@@ -1,7 +1,5 @@
 // region:    --- Modules
 
-use rdkafka::message::ToBytes;
-
 // -- Modules
 pub mod consumer;
 pub mod producer;
@@ -15,12 +13,14 @@ pub use async_trait;
 pub use error::{Error, Result};
 #[doc(hidden)]
 pub use rdkafka;
+#[doc(hidden)]
+pub use rdkafka::message::{FromBytes, ToBytes};
 
 // endregion: --- Modules
 
 pub trait KafkaModel<'a> {
-    fn key(&'a self) -> impl ToBytes;
-    fn payload(&'a self) -> impl ToBytes;
+    fn key(&'a self) -> Result<impl ToBytes>;
+    fn payload(&'a self) -> Result<impl ToBytes>;
 }
 
 impl<'a, K, V> KafkaModel<'a> for (K, V)
@@ -28,11 +28,11 @@ where
     K: ToBytes + 'a,
     V: ToBytes + 'a,
 {
-    fn key(&self) -> impl ToBytes {
-        &self.0
+    fn key(&self) -> Result<impl ToBytes> {
+        Ok(&self.0)
     }
 
-    fn payload(&self) -> impl ToBytes {
-        &self.1
+    fn payload(&self) -> Result<impl ToBytes> {
+        Ok(&self.1)
     }
 }

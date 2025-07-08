@@ -19,8 +19,8 @@ pub async fn produce<'a>(
     topic: &str,
     model: &'a impl KafkaModel<'a>,
 ) -> Result<()> {
-    let key = model.key();
-    let payload = model.payload();
+    let key = model.key()?;
+    let payload = model.payload()?;
 
     let record = FutureRecord::to(topic).key(&key).payload(&payload);
 
