@@ -11,13 +11,12 @@ mod error;
 // -- Flatten
 #[doc(hidden)]
 pub use async_trait;
-use bincode::Encode;
 pub use error::{Error, Result};
 #[doc(hidden)]
 pub use rdkafka;
-#[doc(hidden)]
-pub use rdkafka::message::{FromBytes, ToBytes};
 
+#[doc(hidden)]
+pub use bincode::{Decode, Encode};
 pub use codec::{decode, encode};
 
 // endregion: --- Modules
