@@ -1,0 +1,33 @@
+[package]
+name = "grapple-kafka"
+version = "0.1.0"
+edition = "2021"
+description = "Simple Kafka client"
+authors = ["grapple228 <greenapple228882@yandex.ru>"]
+readme = "readme.md"
+repository = "https://github.com/grapple228/grapple-kafka.git"
+
+[lints.rust]
+unsafe_code = "forbid"
+# unused = { level = "allow", priority = -1 } # For exploratory dev.
+
+[dependencies]
+# My libs
+grapple_utils = { version = "0.2", features = ["envs"] }
+
+# Tracing
+tracing = "0.1"
+
+# Kafka
+rdkafka = "0.38"
+
+#Other
+derive_more = {version = "1", features = ["from"] }
+async-trait = "0.1"
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
