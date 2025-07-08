@@ -18,6 +18,7 @@ pub use rdkafka;
 #[doc(hidden)]
 pub use bincode::{Decode, Encode};
 pub use codec::{decode, encode};
+pub use config::kafka_config;
 
 // endregion: --- Modules
 
