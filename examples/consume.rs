@@ -1,5 +1,7 @@
 mod shared;
 
+use std::time::Duration;
+
 use crate::shared::TestModel;
 use grapple_kafka::{
     async_trait::async_trait,
@@ -7,9 +9,12 @@ use grapple_kafka::{
     decode, Error, Result,
 };
 use rdkafka::consumer::CommitMode;
+use tracing::warn;
 
 #[tokio::main]
+#[allow(unused)]
 async fn main() -> Result<()> {
+    // -- Create consumer
     let config = ConsumerConfig {
         group_id: "test-group".to_string(),
         topics: vec!["test-topic".to_string()],
@@ -19,10 +24,25 @@ async fn main() -> Result<()> {
     };
 
     let consumer = Consumer::new(&config)?;
-    consumer.consume::<MyReceiver>().await?;
+
+    // -- Start consuming as a separate task
+    let consumer_task = tokio::spawn(async move {
+        consumer.consume::<MyReceiver>().await.unwrap();
+    });
+
+    // do something else
+    loop {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        println!("Doing something else...");
+    }
+
+    // -- Wait for consumer task to finish
+    consumer_task.await.unwrap();
 
     Ok(())
 }
+
+// region:    --- MyReceiver
 
 struct MyReceiver;
 
@@ -40,9 +60,14 @@ impl Receiver for MyReceiver {
                 let payload = String::from_utf8_lossy(payload);
                 println!("Test: {}", payload);
             }
-            _ => return Err(Error::KeyNotRegistered),
+            _ => {
+                warn!("Key not registered: {}", key);
+                return Err(Error::KeyNotRegistered(key.to_string()));
+            }
         }
 
         Ok(())
     }
 }
+
+// endregion: --- MyReceiver

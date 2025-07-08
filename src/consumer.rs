@@ -69,7 +69,7 @@ impl Consumer {
         Ok(consumer)
     }
 
-    pub async fn consume<T: Receiver>(&self) -> Result<()> {
+    pub async fn consume<T: Receiver>(self) -> Result<()> {
         use rdkafka::consumer::Consumer;
 
         loop {
@@ -79,15 +79,16 @@ impl Consumer {
                     let key = message.key().ok_or(Error::KeyMissing)?;
                     let key = decode::<String>(key)?;
 
-                    T::process(&key, message.payload()).await?;
-
-                    self.consumer.commit_message(&message, self.commit_mode)?;
+                    match T::process(&key, message.payload()).await {
+                        Ok(_) => self.consumer.commit_message(&message, self.commit_mode)?,
+                        Err(e) => tracing::error!("Error processing message: {}", e),
+                    };
                 }
             }
         }
     }
 
-    pub async fn consume_with_state<T: StateReceiver>(&self, state: Arc<T::State>) -> Result<()> {
+    pub async fn consume_with_state<T: StateReceiver>(self, state: Arc<T::State>) -> Result<()> {
         use rdkafka::consumer::Consumer;
 
         loop {
@@ -97,9 +98,10 @@ impl Consumer {
                     let key = message.key().ok_or(Error::KeyMissing)?;
                     let key = decode::<String>(key)?;
 
-                    T::process(&key, message.payload(), &state).await?;
-
-                    self.consumer.commit_message(&message, self.commit_mode)?;
+                    match T::process(&key, message.payload(), &state).await {
+                        Ok(_) => self.consumer.commit_message(&message, self.commit_mode)?,
+                        Err(e) => tracing::error!("Error processing message: {}", e),
+                    };
                 }
             }
         }
