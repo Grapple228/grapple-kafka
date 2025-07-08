@@ -1,19 +1,14 @@
-use grapple_kafka::{Error, KafkaModel, Result};
-use serde::{Deserialize, Serialize};
+use bincode::{Decode, Encode};
+use grapple_kafka::KafkaModel;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Encode, Decode)]
 pub struct TestModel {
     pub data: String,
     pub data2: String,
 }
 
-impl<'a> KafkaModel<'a> for TestModel {
-    fn key(&'a self) -> Result<impl rdkafka::message::ToBytes> {
-        Ok(b"model-key")
-    }
-
-    fn payload(&'a self) -> Result<impl rdkafka::message::ToBytes> {
-        let value = serde_json::to_vec(&self).map_err(|_| Error::SerializeError)?;
-        Ok(value)
+impl KafkaModel for TestModel {
+    fn key(&self) -> impl Encode {
+        "model-key"
     }
 }

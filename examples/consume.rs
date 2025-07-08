@@ -4,7 +4,7 @@ use crate::shared::TestModel;
 use grapple_kafka::{
     async_trait::async_trait,
     consumer::{Consumer, ConsumerConfig, Receiver},
-    Error, Result,
+    decode, Error, Result,
 };
 use rdkafka::consumer::CommitMode;
 
@@ -31,16 +31,15 @@ enum MyReceiver {
 
 #[async_trait]
 impl Receiver for MyReceiver {
-    fn from(key: &[u8], payload: Option<&[u8]>) -> Result<Self> {
+    fn from(key: &str, payload: Option<&[u8]>) -> Result<Self> {
         let payload = payload.ok_or(Error::PayloadMissing)?;
 
         match key {
-            b"model-key" => {
-                let model = serde_json::from_slice::<TestModel>(payload)
-                    .map_err(|_| Error::DeserializeError)?;
+            "model-key" => {
+                let model = decode(payload)?;
                 Ok(Self::Model(model))
             }
-            b"test-key" => {
+            "test-key" => {
                 let payload = String::from_utf8_lossy(payload);
                 Ok(Self::Test(payload.to_string()))
             }

@@ -1,16 +1,25 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use rdkafka::{
     consumer::{CommitMode, StreamConsumer},
     ClientConfig, Message,
 };
 
-use crate::{config::kafka_config, Error, Result};
+use crate::{config::kafka_config, decode, Error, Result};
 
 #[async_trait]
 pub trait Receiver: Sized + Send + Sync {
-    fn from(key: &[u8], payload: Option<&[u8]>) -> Result<Self>;
-
+    fn from(key: &str, payload: Option<&[u8]>) -> Result<Self>;
     async fn process(&self) -> Result<()>;
+}
+
+#[async_trait]
+pub trait StateReceiver: Sized + Send + Sync {
+    type State;
+
+    fn from(key: &str, payload: Option<&[u8]>) -> Result<Self>;
+    async fn process(&self, state: &Self::State) -> Result<()>;
 }
 
 pub struct ConsumerConfig {
@@ -70,9 +79,29 @@ impl Consumer {
                 Err(e) => tracing::error!("Kafka error: {}", e),
                 Ok(message) => {
                     let key = message.key().ok_or(Error::KeyMissing)?;
+                    let key = decode::<String>(key)?;
 
-                    let model = T::from(key, message.payload())?;
+                    let model = T::from(&key, message.payload())?;
                     model.process().await?;
+
+                    self.consumer.commit_message(&message, self.commit_mode)?;
+                }
+            }
+        }
+    }
+
+    pub async fn consume_with_state<T: StateReceiver>(&self, state: Arc<T::State>) -> Result<()> {
+        use rdkafka::consumer::Consumer;
+
+        loop {
+            match self.consumer.recv().await {
+                Err(e) => tracing::error!("Kafka error: {}", e),
+                Ok(message) => {
+                    let key = message.key().ok_or(Error::KeyMissing)?;
+                    let key = decode::<String>(key)?;
+
+                    let model = T::from(&key, message.payload())?;
+                    model.process(&state).await?;
 
                     self.consumer.commit_message(&message, self.commit_mode)?;
                 }

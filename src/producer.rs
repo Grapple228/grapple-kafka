@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{KafkaModel, Result};
+use crate::{encode, KafkaModel, Result};
 use rdkafka::{
     producer::{FutureProducer, FutureRecord},
     util::Timeout,
@@ -14,13 +14,13 @@ pub fn create(uri: &str) -> Result<FutureProducer> {
     Ok(producer)
 }
 
-pub async fn produce<'a>(
+pub async fn produce(
     future_producer: &FutureProducer,
     topic: &str,
-    model: &'a impl KafkaModel<'a>,
+    model: &impl KafkaModel,
 ) -> Result<()> {
-    let key = model.key()?;
-    let payload = model.payload()?;
+    let key = encode(&model.key())?;
+    let payload = encode(&model.payload()?)?;
 
     let record = FutureRecord::to(topic).key(&key).payload(&payload);
 

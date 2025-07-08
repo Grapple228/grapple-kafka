@@ -17,6 +17,9 @@ pub enum Error {
 
     // -- Externals
     #[from]
+    Codec(crate::codec::Error),
+
+    #[from]
     Envs(grapple_utils::envs::Error),
 
     #[from]

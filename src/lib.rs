@@ -4,35 +4,41 @@
 pub mod consumer;
 pub mod producer;
 
+mod codec;
 mod config;
 mod error;
 
 // -- Flatten
 #[doc(hidden)]
 pub use async_trait;
+use bincode::Encode;
 pub use error::{Error, Result};
 #[doc(hidden)]
 pub use rdkafka;
 #[doc(hidden)]
 pub use rdkafka::message::{FromBytes, ToBytes};
 
+pub use codec::{decode, encode};
+
 // endregion: --- Modules
 
-pub trait KafkaModel<'a> {
-    fn key(&'a self) -> Result<impl ToBytes>;
-    fn payload(&'a self) -> Result<impl ToBytes>;
+pub trait KafkaModel: Encode {
+    fn key(&self) -> impl Encode;
+    fn payload(&self) -> Result<impl Encode> {
+        Ok(self)
+    }
 }
 
-impl<'a, K, V> KafkaModel<'a> for (K, V)
+impl<K, V> KafkaModel for (K, V)
 where
-    K: ToBytes + 'a,
-    V: ToBytes + 'a,
+    K: Encode,
+    V: Encode,
 {
-    fn key(&self) -> Result<impl ToBytes> {
-        Ok(&self.0)
+    fn key(&self) -> impl Encode {
+        &self.0
     }
 
-    fn payload(&self) -> Result<impl ToBytes> {
+    fn payload(&self) -> Result<impl Encode> {
         Ok(&self.1)
     }
 }
