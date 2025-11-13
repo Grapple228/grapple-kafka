@@ -2,7 +2,9 @@
 
 // -- Modules
 pub mod consumer;
+pub mod dummy;
 pub mod producer;
+pub mod service;
 
 mod codec;
 mod config;
@@ -22,7 +24,7 @@ pub use config::kafka_config;
 
 // endregion: --- Modules
 
-pub trait KafkaModel: Encode {
+pub trait KafkaModel: Encode + Send + Sync {
     fn key(&self) -> impl Encode;
     fn payload(&self) -> Result<impl Encode> {
         Ok(self)
@@ -31,8 +33,8 @@ pub trait KafkaModel: Encode {
 
 impl<K, V> KafkaModel for (K, V)
 where
-    K: Encode,
-    V: Encode,
+    K: Encode + Send + Sync,
+    V: Encode + Send + Sync,
 {
     fn key(&self) -> impl Encode {
         &self.0

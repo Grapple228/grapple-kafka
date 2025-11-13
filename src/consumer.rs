@@ -40,12 +40,34 @@ impl ConsumerConfig {
     }
 }
 
-pub struct Consumer {
+#[async_trait]
+pub trait ConsumerLike: Send + Sync {
+    async fn consume_with_state<R>(self, state: Arc<R::State>) -> Result<()>
+    where
+        R: StateReceiver + Send + Sync,
+        R::State: Send + Sync;
+}
+
+// Реализация для FutureProducer
+
+#[async_trait]
+impl ConsumerLike for crate::consumer::KafkaConsumer {
+    async fn consume_with_state<R>(self, state: Arc<R::State>) -> Result<()>
+    where
+        R: StateReceiver + Send + Sync,
+        R::State: Send + Sync,
+    {
+        // Просто делегируем к существующему методу
+        crate::consumer::KafkaConsumer::consume_with_state::<R>(self, state).await
+    }
+}
+
+pub struct KafkaConsumer {
     consumer: StreamConsumer,
     commit_mode: CommitMode,
 }
 
-impl Consumer {
+impl KafkaConsumer {
     pub fn default() -> Result<Self> {
         let config = ConsumerConfig::default();
 
@@ -59,32 +81,22 @@ impl Consumer {
             .set("auto.offset.reset", &config.offset_reset)
             .create()?;
 
-        let mut consumer = Self {
+        let mut kafka_consumer = Self {
             consumer,
             commit_mode: config.commit_mode,
         };
 
-        consumer.subscribe(&config.topics)?;
+        kafka_consumer.subscribe(&config.topics)?;
 
-        Ok(consumer)
+        Ok(kafka_consumer)
     }
 
-    pub async fn consume<T: Receiver>(self) -> Result<()> {
-        use rdkafka::consumer::Consumer;
-
-        loop {
-            match self.consumer.recv().await {
-                Err(e) => tracing::error!("Kafka error: {}", e),
-                Ok(message) => {
-                    let key = message.key().ok_or(Error::KeyMissing)?;
-                    let key = decode::<String>(key)?;
-
-                    match T::process(&key, message.payload()).await {
-                        Ok(_) => self.consumer.commit_message(&message, self.commit_mode)?,
-                        Err(e) => tracing::error!("Error processing message: {}", e),
-                    };
-                }
-            }
+    fn is_fatal_error(error: &rdkafka::error::KafkaError) -> bool {
+        match error {
+            rdkafka::error::KafkaError::ClientConfig(_, _, _, _) => true,
+            rdkafka::error::KafkaError::ClientCreation(_) => true,
+            rdkafka::error::KafkaError::Subscription(_) => true,
+            _ => false,
         }
     }
 
@@ -93,13 +105,53 @@ impl Consumer {
 
         loop {
             match self.consumer.recv().await {
-                Err(e) => tracing::error!("Kafka error: {}", e),
+                Err(e) => {
+                    tracing::error!("Kafka error: {}", e);
+                    if Self::is_fatal_error(&e) {
+                        break Err(Error::Rdkafka(e));
+                    }
+                }
                 Ok(message) => {
                     let key = message.key().ok_or(Error::KeyMissing)?;
                     let key = decode::<String>(key)?;
 
                     match T::process(&key, message.payload(), &state).await {
-                        Ok(_) => self.consumer.commit_message(&message, self.commit_mode)?,
+                        Ok(_) => {
+                            if let Err(e) = self.consumer.commit_message(&message, self.commit_mode)
+                            {
+                                tracing::error!("Commit error: {}", e);
+                            }
+                        }
+                        Err(e) => tracing::error!("Error processing message: {}", e),
+                    };
+                }
+            }
+        }
+    }
+
+    // Аналогично для consume без state
+    pub async fn consume<T: Receiver>(self) -> Result<()> {
+        use rdkafka::consumer::Consumer;
+
+        loop {
+            match self.consumer.recv().await {
+                Err(e) => {
+                    tracing::error!("Kafka error: {}", e);
+                    if Self::is_fatal_error(&e) {
+                        break Err(Error::Rdkafka(e));
+                    }
+                }
+                Ok(message) => {
+                    let key = message.key().ok_or(Error::KeyMissing)?;
+                    let key = decode::<String>(key)?;
+
+                    match T::process(&key, message.payload()).await {
+                        Ok(_) => {
+                            if let Err(e) = self.consumer.commit_message(&message, self.commit_mode)
+                            {
+                                tracing::error!("Commit error: {}", e);
+                            }
+                        }
                         Err(e) => tracing::error!("Error processing message: {}", e),
                     };
                 }

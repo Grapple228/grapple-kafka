@@ -27,6 +27,7 @@ bincode = "2"
 #Other
 derive_more = {version = "1", features = ["from"] }
 async-trait = "0.1"
+tokio = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

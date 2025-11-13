@@ -1,12 +1,14 @@
 mod shared;
 
-use std::time::Duration;
+use std::sync::Arc;
 
 use crate::shared::TestModel;
 use grapple_kafka::{
     async_trait::async_trait,
-    consumer::{Consumer, ConsumerConfig, Receiver},
-    decode, Error, Result,
+    consumer::{ConsumerConfig, StateReceiver},
+    decode,
+    service::KafkaService,
+    Error, Result,
 };
 use rdkafka::consumer::CommitMode;
 use tracing::warn;
@@ -14,8 +16,10 @@ use tracing::warn;
 #[tokio::main]
 #[allow(unused)]
 async fn main() -> Result<()> {
+    println!("Consumer only");
+
     // -- Create consumer
-    let config = ConsumerConfig {
+    let consumer_config = ConsumerConfig {
         group_id: "test-group".to_string(),
         topics: vec!["test-topic".to_string()],
         uri: "localhost:9094".to_string(),
@@ -23,32 +27,29 @@ async fn main() -> Result<()> {
         commit_mode: CommitMode::Async,
     };
 
-    let consumer = Consumer::new(&config)?;
+    let state = Arc::new(MyState);
 
-    // -- Start consuming as a separate task
-    let consumer_task = tokio::spawn(async move {
-        consumer.consume::<MyReceiver>().await.unwrap();
-    });
+    let kafka_service = KafkaService::<MyReceiver>::from_config(&consumer_config, state)?;
+    let kafka_service = kafka_service.start_consumer().await?;
 
-    // do something else
-    loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        println!("Doing something else...");
-    }
-
-    // -- Wait for consumer task to finish
-    consumer_task.await.unwrap();
+    tokio::signal::ctrl_c().await.unwrap();
+    tracing::info!("Received Ctrl+C, shutting down...");
 
     Ok(())
 }
 
 // region:    --- MyReceiver
 
+struct MyState;
+
 struct MyReceiver;
 
 #[async_trait]
-impl Receiver for MyReceiver {
-    async fn process(key: &str, payload: Option<&[u8]>) -> Result<()> {
+
+impl StateReceiver for MyReceiver {
+    type State = MyState;
+
+    async fn process(key: &str, payload: Option<&[u8]>, _state: &Self::State) -> Result<()> {
         let payload = payload.ok_or(Error::PayloadMissing)?;
 
         match key {
